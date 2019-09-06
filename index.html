@@ -1,0 +1,418 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+ <head> 
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> 
+  <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9"> 
+  <!-- UI Version: default --> 
+  <!--The viewport meta tag is used to improve the presentation and behavior of the samples 
+      on iOS devices--> 
+  <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0,user-scalable=no"> 
+  <title>UCSB Interactive Campus Map</title> 
+  <link rel="stylesheet" href="css/default.css"> 
+  <link rel="stylesheet" type="text/css" href="css/simpletree.css"> 
+  <meta property="og:image" content="http://map.geog.ucsb.edu/images/ucsb-icm-header-v2.1.png"> 
+  <meta property="og:url" content="http://map.geog.ucsb.edu"> 
+  <meta property="og:title" content="UCSB Interactive Campus Map"> 
+  <meta property="og:description" content="The Interactive Campus Map (ICM) is a project aimed at creating the best map resource possible for UCSB patrons and visitors. Entirely developed by UCSB Geography students, the ICM is constantly evolving with updates and new features are being added regularly. We welcome all who are interested in contributing and would love to see you at our next meeting!"> 
+  <script src="js/jquery.min.js" type="text/javascript"></script> 
+  <script src="js/highstock.js"></script> 
+  <script src="js/exporting.js"></script> 
+  <script type="text/javascript">
+    	var djConfig = {
+              parseOnLoad: true  //This is required to make sure dojo/arcgis js runs OnLoad.
+            };
+        var mapRootHost = "mapdev.geog.ucsb.edu";
+        var mapRootUrl = 'http://'+mapRootHost+'/'; // Must have trailing slash EX: http://map.geog.ucsb.edu/
+        var user_device = 'default';
+		var icm = new Array(); // This is the future placeholder of all icm variables and objects - not yet in use yet.
+		icm['api_hostname'] = '';
+		if (window.location.hostname === '11.11.11.11') { // Checks to see if map is being loaded from the Vagrant VM (for development purposes only)
+			icm['api_hostname'] = 'map.geog.ucsb.edu'; // If it is, then set the api_hostname to map.geog.ucsb.edu so the map can query the API properly.
+		}
+        
+        function toggleSidebar() { // This is used to toggle the left sidemenu on/off.
+            var bc = dijit.byId("bc");
+            var leftPane = dijit.byId("leftPane");
+            var sidebarText = dojo.byId("toggleSidebarText");
+            if (sidebarText.innerHTML == 'Hide Menu') {
+                //Hide the Menu
+                window.savedCenter = map.extent.getCenter();
+                setTimeout(function() {
+                    //bc.removeChild(leftPane);
+                    dojo.byId('leftPane').style.width = '0px';
+                    dijit.byId('leftPane').resize();
+                    dijit.byId('bc').resize();
+                    sidebarText.innerHTML = "Show Menu";
+                    setTimeout(function() {
+                        map.centerAt(savedCenter);
+                    }, 400);
+                }, 50);
+            }
+            if (sidebarText.innerHTML == 'Show Menu') {
+                //Show the menu
+                window.savedCenter = map.extent.getCenter();
+                setTimeout(function() {
+                    //bc.addChild(leftPane);
+                    dojo.byId('leftPane').style.width = '275px'
+                    dijit.byId('leftPane').resize();
+                    dijit.byId('bc').resize();
+                    sidebarText.innerHTML = "Hide Menu";
+                    setTimeout(function() {
+                        map.centerAt(savedCenter);
+                    }, 400);
+                }, 50);
+            }
+        }//End toggleSidebar()
+    </script> 
+  <link rel="stylesheet" href="css/claro.css"> 
+  <link rel="stylesheet" href="css/esri.css"> 
+  <script src="/null_7d78251f5f324f529e0a067fc35d60b6."></script> 
+  <script src="js/all-min-a3949384e3ee6be03faa1345f1efd06a4f3c4b23.js"></script> 
+  <style>
+        #currentLocation_layer {
+            opacity:.65;
+        }
+        </style> 
+ </head> 
+ <body class="claro" onorientationchange="orientationChanged();"> 
+  <!--Facebook Like Javascript SDK --> 
+  <div id="fb-root"></div> 
+  <script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script> 
+  <!--END FACEBOOK LIKE JAVASCRIPT SDK --> 
+  <div data-dojo-type="dijit.layout.BorderContainer" style="width: 100%; height: 100%;" gutters="false" id="bc"> 
+   <div data-dojo-type="dijit.layout.ContentPane" id="header" region="top" layout="headline" gutters="false"> 
+    <div id="header-logo-div"> 
+     <img id="header-logo-img" src="images/ucsb-icm-header-v2.1.png" alt="Interactive Campus Map Logo"> 
+    </div> 
+    <div id="header-buttons-div"> 
+     <button class="header-buttons-button" id="getShareLink" data-dojo-type="dijit.form.Button" type="button">Get Share Link <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt" style="z-index:100;">
+                                                    updateShareLink();
+                                                    sharelinkDialog.show();
+                                        </script> </button> 
+     <button class="header-buttons-button" id="buttonAboutThisMap" data-dojo-type="dijit.form.Button" type="button" style="z-index:100; color: #f3f315;">Readme <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt">
+                                                    aboutmapDialog.show();
+                                        </script> </button> 
+     <!-- <button class='header-buttons-button' id="buttonFeedback" data-dojo-type="dijit.form.Button" type="button" style="z-index:100;">Feedback
+                                        <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt">
+                                                    feedbackDialog.show();
+                                        </script>
+                                    </button> --> 
+     <span id="facebook-like-button"> 
+      <div class="fb-like" data-href="http://map.geog.ucsb.edu" data-width="0" data-layout="button_count" data-send="true" style="position:relative;float:right;"></div> </span> 
+    </div> 
+   </div> 
+   <div data-dojo-type="dijit.layout.ContentPane" data-dojo-props="region:'center'" region="center" id="mapDiv" class="map" style="border:0px; margin:0px; padding:0px;"> 
+    <!--<div id="geogLogoDiv" style="position: absolute; right:5px; bottom:50px; background-image:url('images/geoglogocolor65.gif'); display: inline-block; vertical-align:bottom; width:65; height:75; z-index:30; cursor:pointer;"> </div>--> 
+    <div id="geogMapLogo"></div> 
+    <img id="loadingImg" src="images/loading_c3dce95ee7a84e6e8331b3ea640c3544.gif" width="64px" style="position:absolute; right:50%; top:50%; z-index:100;"> 
+    <div id="mapInfowindowDiv" style="visibility:hidden; background-color:whitesmoke; font-weight:bolder; font-size:smaller; text-align:right; position:fixed; padding:3px; right:5px; bottom:5px; z-index:99; max-width:66%; max-height:33%;">
+     This is the mapInfowindowDiv
+    </div> 
+    <div id="mapOverlayDiv" style="visibility:hidden; -webkit-border-radius: 8px; -moz-border-radius: 8px; border-radius: 8px; border:1px solid #2C2C2C; background:whitesmoke; padding:5px; position:absolute; top:20px; left:85px; z-index:100;"></div> 
+    <div id="toggleSidebarDiv" class="toggleSidebarDiv"> 
+     <span style="position:relative; left:8px; text-decoration:none; color: #666666;"> <a href="#" style="text-decoration:none; font-weight:bold;" onclick="toggleSidebar()"><span class="css-vertical-text" id="toggleSidebarText">Hide Menu</span></a> </span> 
+    </div> 
+    <div id="compassroseDiv">
+     <img id="compassroseImg" src="images/compass-rose-v2.png" alt="compass-rose">
+    </div> 
+    <div id="floorSelectorDiv" class="esriSimpleSlider"> 
+     <b>Building Interiors</b>
+     <hr style="margin:0px"> 
+     <a id="selector_changeLayer('floor1')" href="javascript:changeLayer('floor1');">Ground Floor</a>
+     <hr style="margin:0px"> 
+     <!-- Upon review, the additional layers will be enabled in the UI --> 
+     <!--<a id="selector_changeLayer('floor2')" href="javascript:changeLayer('floor2');">Floor 2</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor3')" href="javascript:changeLayer('floor3');">Floor 3</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor4')" href="javascript:changeLayer('floor4');">Floor 4</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor5')" href="javascript:changeLayer('floor5');">Floor 5</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor6')" href="javascript:changeLayer('floor6');">Floor 6</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor7')" href="javascript:changeLayer('floor7');">Floor 7</a><hr style="margin:0px"/>
+                <a id="selector_changeLayer('floor8')" href="javascript:changeLayer('floor8');">Floor 8</a>--> 
+    </div> 
+    <div id="extentQuickZoom" class="esriSimpleSlider esriSimpleSliderVertical esriSimpleSliderTL icmExtentToolbarDiv" style="display:none;"> 
+     <div class="esriSimpleSliderIncrementButton">
+      <a onclick="map.setExtent(campusExtent);"><img id="zoomCampus" src="images/iconCampusExtent-v2.png" border="0" class="esriSimpleSliderIMG" alt="Zoom to the Campus View Extent"></a>
+     </div> 
+     <div class="esriSimpleSliderDecrementButton">
+      <a onclick="map.setExtent(layers['basemap'].fullExtent);"><img id="zoomFullExtent" src="images/iconFullMapExtent.png" border="0" class="esriSimpleSliderIMG" alt="Zoom to the Full Extent of the Map"></a>
+     </div> 
+    </div> 
+    <div id="LocateButton"></div> 
+    <div id="HomeButton"></div> 
+    <div style="font-size:75%; position:absolute; right:10px; top:10px; z-Index:999;"> 
+     <div data-dojo-type="dijit/TitlePane" data-dojo-props="title:'Switch Basemap', closable:false,  open:false"> 
+      <div data-dojo-type="dijit/layout/ContentPane" style="min-width:75px; max-width:250px; min-height:50px; max-height:280px; overflow:auto;"> 
+       <div id="basemapGallery"></div>
+      </div> 
+     </div> 
+    </div> 
+   </div> 
+   <div dojotype="dijit.layout.BorderContainer" region="leading" id="leftPane"> 
+    <div dojotype="dijit.layout.ContentPane" region="top" style="padding:0px;"> 
+     <!-- NAVIGATION TOOLBAR--> 
+     <div dojotype="dijit.Toolbar" style="padding:2px; height:25px;"> 
+      <div dojotype="dijit.form.Button" style="float:left;">
+       Reset Map 
+       <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt">
+				        			clearLayers();
+									map.setExtent(campusExtent);
+				    			</script> 
+      </div>&nbsp; 
+      <!--Print module disabled because it's broken with ArcGIS JS API update --> 
+      <!--<div id="printButton" style="float:right; position:absolute; top:2px; right:2px"></div>--> 
+     </div> 
+    </div> 
+    <div data-dojo-type="dijit.layout.AccordionContainer" region="leading" gutters="true" style="width:96%;" id="mainAccordionCont"> 
+     <div dojotype="dijit.layout.AccordionPane" id="pane_Legend" title="<img src='images/iconLegend.png' height='25px'></img>&nbsp;&nbsp;<font style='font-size:150%'>Legend</font>"> 
+      <div id="legendDiv"></div> 
+      <br>
+      <a href="javascript:clearLayers();">Clear Map</a> 
+     </div> 
+     <div dojotype="dijit.layout.AccordionPane" id="pane_Layers" title="<img src='images/iconLayers.png' height='25px'></img>&nbsp;&nbsp;<font style='font-size:150%'>Layers</font>"> 
+      <div> 
+       <ul id="layersmenu" class="treeview" style="margin:0px; margin-top:10px; padding-left:0px; margin-left:-15px;"> 
+        <li><span id="dropdown_New"><b><img src="images/iconNew.png" height="15px">&nbsp; Recently Added</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('sustainIVSustainability')">Isla Vista Sustainability</a></li> 
+          <li><a href="javascript:changeLayer('icmRestrooms')">Restrooms</a></li> 
+          <li><a href="javascript:changeLayer('sustainGIVEsale')">GIVE Sale Donation Sites</a></li> 
+          <li><a href="javascript:changeLayer('campusfloraEdiblePlantsTour')">Edible Plants Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainSolarPanels')">Solar Panels</a></li> 
+          <li><a href="javascript:changeLayer('sustainWasteLayer')">Waste Infrastructure</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraEdiblePlants')" href="javascript:changeLayer('campusfloraEdiblePlants')">Edible Plants</a></li> 
+          <li><a href="javascript:changeLayer('sustainLEEDBuildings')">LEED Buildings</a></li> 
+          <li><a href="javascript:changeLayer('sustainTGIFshowcase')">All TGIF Projects</a></li> 
+          <li><a href="javascript:changeLayer('sustainBikeLocker')">Bike Parking &amp; Lockers</a></li> 
+          <li><a href="javascript:changeLayer('sustainBikeTour')">Bike Tour</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_General"><b><img src="images/iconLayers.png" height="15px">&nbsp; General</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('icmRestrooms')">Restrooms</a></li> 
+          <li><a href="javascript:changeLayer('admissionsTour')">Admissions Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainBikeTour')">Bike Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainBikePumpTools')">Bike Tools &amp; Repair Stations</a></li> 
+          <li><a href="javascript:changeLayer('sustainBikeLocker')">Bike Parking &amp; Lockers</a></li> 
+          <li><a href="javascript:changeLayer('sustainPrinters')">On-Campus Printers</a></li> 
+          <li><a href="javascript:changeLayer('sustainLabResources')">Lab Resources</a></li> 
+          <li><a href="javascript:changeLayer('GraduateStudentResources')">Graduate Student Resources</a></li> 
+          <li><a href="javascript:changeLayer('sustainCCBERManagedAreas')">Natural Areas</a></li> 
+          <li><a id="general_changeLayer('foodEstablishments')" href="javascript:changeLayer('foodEstablishments');">Food Establishments</a></li> 
+          <li><a id="general_changeLayer('recreation')" href="javascript:changeLayer('recreation');">Recreation Areas</a></li> 
+          <li><a id="general_changeLayer('resources')" href="javascript:changeLayer('resources');">Campus Services</a></li> 
+          <li><a id="general_changeLayer('emergencyPhones')" href="javascript:changeLayer('emergencyPhones');">Emergency Phones</a></li> 
+          <li><a href="javascript:changeLayer('sustainGIVEsale')">GIVE Sale Donation Sites</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_Tours"><b><img src="images/iconTours.png" height="15px">&nbsp; Self-Guided Tours</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('sustainBikeTour')">Bike Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainCampusSustainabilityTour')">Campus Sustainability Tour</a></li> 
+          <li><a href="javascript:changeLayer('admissionsTour')">Admissions Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainLagoonTour')">UCSB Lagoon Tour</a></li> 
+          <li><a href="javascript:changeLayer('campusfloraEthnobotanicalTour')">Ethnobotanical Tour</a></li> 
+          <li><a href="javascript:changeLayer('campusfloraPalmsTour')">Palms Tour</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_Parking"><b><img src="images/iconParking.gif" height="15px">&nbsp; Parking</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('sustainBikeLocker')">Bike Parking &amp; Lockers</a></li> 
+          <li><a id="parking_changeLayer('sustainEVCharge')" href="javascript:changeLayer('sustainEVCharge')">Electric Vehicle Parking &amp; Charging</a></li> 
+          <li><a id="parking_changeLayer('visitorStudent')" href="javascript:changeLayer('visitorStudent');">Visitor / Student Parking</a></li> 
+          <li><a id="parking_changeLayer('metered')" href="javascript:changeLayer('metered');">Metered Parking</a></li> 
+          <li><a id="parking_changeLayer('faculty')" href="javascript:changeLayer('faculty');">Faculty Parking</a></li> 
+          <li><a id="parking_changeLayer('staff')" href="javascript:changeLayer('staff');">Staff Parking</a></li> 
+          <li><a id="parking_changeLayer('motorcycle')" href="javascript:changeLayer('motorcycle');">Motorcycle Parking</a></li> 
+          <li><a id="parking_changeLayer('resident')" href="javascript:changeLayer('resident');">Resident Parking</a></li> 
+          <li><a id="parking_changeLayer('ada')" href="javascript:changeLayer('ada');">ADA Parking</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_ADA"><b><img src="images/iconADA.gif" height="15px">&nbsp; ADA &amp; Accessibility</b></span> 
+         <ul> 
+          <li><a id="ADA_changeLayer('ada')" href="javascript:changeLayer('ada');">ADA Parking</a></li> 
+          <li><a id="ADA_changeLayer('emergencyPhones')" href="javascript:changeLayer('emergencyPhones');">Emergency Phones</a></li> 
+          <li><a id="ADA_changeLayer('TalkingSigns')" href="javascript:changeLayer('TalkingSigns');">Talking Signs</a></li> 
+          <li><font style="font-size:90%;"><u>Building Interiors</u></font></li> 
+          <li>&nbsp; &nbsp; &nbsp; &nbsp; <a id="ADA_changeLayer('floor1')" href="javascript:changeLayer('floor1');">Ground Floor</a></li> 
+          <!-- Will be re-enabled once the higher level floor maps are approved --> 
+          <!--<li>        2. <a id="ADA_changeLayer('floor2')" href="javascript:changeLayer('floor2');">Second Floor</a></li>
+											<li>        3. <a id="ADA_changeLayer('floor3')" href="javascript:changeLayer('floor3');">Third Floor</a></li>
+											<li>        4. <a id="ADA_changeLayer('floor4')" href="javascript:changeLayer('floor4');">Fourth Floor</a></li>
+											<li>        5. <a id="ADA_changeLayer('floor5')" href="javascript:changeLayer('floor5');">Fifth Floor</a></li>
+											<li>        6. <a id="ADA_changeLayer('floor6')" href="javascript:changeLayer('floor6');">Sixth Floor</a></li>
+											<li>        7. <a id="ADA_changeLayer('floor7')" href="javascript:changeLayer('floor7');">Seventh Floor</a></li>
+											<li>        8. <a id="ADA_changeLayer('floor8')" href="javascript:changeLayer('floor8');">Eighth Floor</a></li>--> 
+         </ul> </li> 
+        <li><span id="dropdown_RecyclingWaste"><b><img src="images/iconRecyclingWaste.png" height="15px">&nbsp; Recycling &amp; Waste</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('sustainWasteLayer')">Waste Infrastructure</a></li> 
+          <li><a href="javascript:changeLayer('sustainAllCompost')">Compost Bins</a></li> 
+          <li><a href="javascript:changeLayer('sustainBigBelly')">Big Belly Bins</a></li> 
+          <li><a href="javascript:changeLayer('sustainTechnoTrash')">E-Waste</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_Sustainability"><b><img src="images/iconSustainability.png" height="15px">&nbsp; Sustainability</b></span> 
+         <ul> 
+          <li style="font-size:85%;"><span id="dropdown_Sustainability_TGIF"><b><img src="images/iconTGIF.png" height="15px">The Green Initiative Fund</b></span> 
+           <ul> 
+            <li><a href="javascript:changeLayer('sustainTGIFshowcase')">All TGIF Projects</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF0607')">TGIF Projects 2006-2007</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF0708')">TGIF Projects 2007-2008</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF0809')">TGIF Projects 2008-2009</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF0910')">TGIF Projects 2009-2010</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF1011')">TGIF Projects 2010-2011</a></li> 
+            <li><a href="javascript:changeLayer('sustainTGIF1112')">TGIF Projects 2011-2012</a></li> 
+           </ul> </li> 
+          <li style="font-size:85%;"><span id="dropdown_Sustainability_Resources"><b><img src="images/arrow.png" height="15px">Sustainability Resources</b></span> 
+           <ul> 
+            <li><a href="javascript:changeLayer('sustainStudentOffices')">Sustainability Student Leaders</a></li> 
+            <li><a href="javascript:changeLayer('sustainPeoplesOffices')">Sustainability Offices</a></li> 
+            <li><a href="javascript:changeLayer('sustainResearcher')">Sustainability Researchers</a></li> 
+           </ul> </li> 
+          <!--<li style="font-size:85%;"><span id="dropdown_Sustainability_COP"><b><img src='images/arrow.png' height='15px' />Coal Oil Point</b></span>
+                                                <ul>
+	   
+                                                </ul>
+                                            </li>--> 
+          <li style="font-size:85%;"><span id="dropdown_Sustainability_GreenCertification"><b><img src="images/arrow.png" height="15px">Green Certification</b></span> 
+           <ul> 
+            <li><a href="javascript:changeLayer('sustainGreenOffice')">Green Certified Offices</a></li> 
+            <li><a href="javascript:changeLayer('sustainLabRAT')">Green Certified Labs</a></li> 
+           </ul> </li> 
+          <li style="font-size:85%;"><span id="dropdown_Sustainability_AltTransport"><b><img src="images/arrow.png" height="15px">Alternative Transport Resources</b></span> 
+           <ul> 
+            <li><a href="javascript:changeLayer('sustainEVCharge')">Electric Vehicle Parking &amp; Charging</a></li> 
+            <li><a href="javascript:changeLayer('sustainZipcars')">Zipcar Stations</a></li> 
+            <li><a href="javascript:changeLayer('sustainBikeLocker')">Bike Parking &amp; Lockers</a></li> 
+           </ul> </li> 
+          <li><a href="javascript:changeLayer('sustainIVSustainability')">Isla Vista Sustainability</a></li> 
+          <li><a href="javascript:changeLayer('hydrationStations')">Hydration Stations</a></li> 
+          <li><a href="javascript:changeLayer('sustainLEEDBuildings')">LEED Buildings</a></li> 
+          <li><a href="javascript:changeLayer('sustainSolarPanels')">Solar Panels</a></li> 
+          <li><a href="javascript:changeLayer('sustainCCBERPointsOfInterest')">CCBER Points of Interest</a></li> 
+          <li><a href="javascript:changeLayer('sustainIrrigation')">Irrigation Types &amp; Vegetation Types</a></li> 
+          <li><a href="javascript:changeLayer('sustainLabResources')">Lab Resources</a></li> 
+          <li><a href="javascript:changeLayer('sustainPrinters')">On-Campus Printers</a></li> 
+          <li><a href="javascript:changeLayer('sustainCampusSustainabilityTour')">Campus Sustainability Tour</a></li> 
+          <li><a href="javascript:changeLayer('sustainLagoonTour')">Lagoon Tour</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_CampusFlora"><b><img src="images/iconCampusflora.png" height="15px">&nbsp; Campus Flora</b></span> 
+         <ul> 
+          <li><a href="javascript:changeLayer('campusfloraEdiblePlantsTour')">Edible Plants Tour</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraMedicinalPlants')" href="javascript:changeLayer('campusfloraMedicinalPlants')">Medicinal Plants</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraEdiblePlants')" href="javascript:changeLayer('campusfloraEdiblePlants')">Edible Plants</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraStylized')" href="javascript:changeLayer('campusfloraStylized')">Stylized</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraEthnobotanicalTour')" href="javascript:changeLayer('campusfloraEthnobotanicalTour')">Ethnobotanical Tour</a></li> 
+          <li><a id="campusflora_changeLayer('campusfloraPalmsTour')" href="javascript:changeLayer('campusfloraPalmsTour')">Palms Tour</a></li> 
+          <!-- Commented out, because it won't load. DGP. 15jul2015.											<li><a id="campusflora_changeLayer('campusfloraExoticPlantsTour')" href="javascript:changeLayer('campusfloraExoticPlantsTour')">Exotic Plants Tour</a></li> -----> 
+         </ul> </li> 
+        <li><span id="dropdown_HistoricalImagery"><b><img src="images/iconHistoricalImagery.png" height="15px">&nbsp; Historical Imagery</b></span> 
+         <ul> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1929')" href="javascript:changeLayer('aerialimagery1929')">1929</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1938')" href="javascript:changeLayer('aerialimagery1938')">1938</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1947')" href="javascript:changeLayer('aerialimagery1947')">1947</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1959')" href="javascript:changeLayer('aerialimagery1959')">1959</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1966')" href="javascript:changeLayer('aerialimagery1966')">1966</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1971')" href="javascript:changeLayer('aerialimagery1971')">1971</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1975')" href="javascript:changeLayer('aerialimagery1975')">1975</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1983')" href="javascript:changeLayer('aerialimagery1983')">1983</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery1995')" href="javascript:changeLayer('aerialimagery1995')">1995</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery2006')" href="javascript:changeLayer('aerialimagery2006')">2006</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery2010')" href="javascript:changeLayer('aerialimagery2010')">2010</a></li> 
+          <li><a id="historicalimagery_changeLayer('aerialimagery2012')" href="javascript:changeLayer('aerialimagery2012')">2012</a></li> 
+         </ul> </li> 
+        <li><span id="dropdown_AddCustomLayer"><b><img src="images/iconAddLayer.png" height="15px">&nbsp; Add Custom Layer</b></span> 
+         <ul> 
+          <li><i><small>** For Developer Use Only **</small></i></li> 
+          <li><i>Layer URL:</i> <br> <input type="text" id="addcustomlayer_URL" onblur="checkCustomURLType(this.value);" onchange="checkCustomURLType(this.value);" style="width:98%;"> </li> 
+          <li><i>Type:</i>&nbsp;&nbsp; <select id="addcustomlayer_Type" style="width:45%;"> <option value="dynamic">Dynamic</option> <option value="cached">Cached</option> <option value="kml">KML</option> </select> </li> 
+          <li> <button id="buttonAddCustomLayer_updatemap" data-dojo-type="dijit.form.Button" type="button">Update Map <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt">
+												        	addCustomLayer();
+												    </script> </button> </li> 
+         </ul> </li> 
+       </ul> 
+       <br>
+       <a href="javascript:clearLayers();">Clear Map</a> 
+      </div> 
+     </div> 
+     <div dojotype="dijit.layout.AccordionPane" id="pane_SearchMap" selected="true" title="<img src='images/iconSearch.png' height='25px'></img>&nbsp;&nbsp;<font style='font-size:150%'>Search Map</font>"> 
+      <div> 
+       <label for="searchForm"> Search Text: </label> 
+       <br> 
+       <!--<input id="placeSelect" name="search" style="width:95%"/>--> 
+       <form id="searchForm" data-dojo-type="dijit.form.Form"> 
+        <input id="searchBox" type="text" data-dojo-type="dijit.form.TextBox" style="width: 100%"> 
+        <button data-dojo-type="dijit.form.Button" type="submit" style="float:right;">Search</button> 
+       </form> 
+       <br> 
+       <div id="searchResultMessage"></div> 
+       <div id="searchResultsDiv"></div> 
+       <div id="searchResultsExampleDiv" style="width:99%"> 
+        <small> <i><b>Examples: </b><br> <u>Buildings:</u><br> &nbsp;&nbsp;&nbsp;&nbsp;Ellison Hall<br> &nbsp;&nbsp;&nbsp;&nbsp;building 563<br> &nbsp;&nbsp;&nbsp;&nbsp;563<br> &nbsp;&nbsp;&nbsp;&nbsp;ELLSN<br> 
+          <!-- 	<u>Departments:</u><br />
+											    Geography Department<br />
+											    Environmental Studies<br />
+											    Film and Media Studies<br / --> <u>Rooms:</u><br> &nbsp;&nbsp;&nbsp;&nbsp;ELLSN 1710<br> &nbsp;&nbsp;&nbsp;&nbsp;Ellison Hall 1710<br> &nbsp;&nbsp;&nbsp;&nbsp;1710 Ellison Hall<br> &nbsp;&nbsp;&nbsp;&nbsp;1710 ELLSN<br> 
+          <!--		<u>Classes (Current Quarter):</u><br />
+                                                                                        ** Section courses not listed **
+											    GEOG 128<br />
+											    53116 (Enroll Code/Session)<br />
+											    Clarke (Professor last name)<br />
+									--> <u>Faculty / Staff</u> (Last Name)<br>  </i> </small> 
+       </div> 
+      </div> 
+     </div> 
+    </div> 
+   </div> 
+  </div> 
+  <div data-dojo-type="dijit.Dialog" data-dojo-id="sharelinkDialog" title="Share Link"> 
+   <div> 
+    <span class="dijitDialogPaneContentArea"> <label for="info"> You can copy this link in an e-mail or bookmark it load your<br> current view and active layer when the map starts.</label><br> <textarea rows="4" cols="50" id="info"></textarea><br> <button class="header-buttons-button" id="buttonShortenURL" data-dojo-type="dijit.form.Button" type="button" style="z-index:100; float:right;">Shorten URL <script type="dojo/on" data-dojo-event="click" data-dojo-args="evt">
+                                                    getTinyurl(images/shareLink);
+                                        </script> </button> <input data-dojo-type="dijit.form.Checkbox" type="checkbox" id="sharelinkExactExtent" onclick="updateShareLink();" checked>Include Current Map Extent<br> <input data-dojo-type="dijit.form.Checkbox" type="checkbox" id="sharelinkCurrentLayer" onclick="updateShareLink();" checked>Include Active Layer<br> <input data-dojo-type="dijit.form.Checkbox" type="checkbox" id="sharelinkSearchResult" onclick="updateShareLink();" checked>Include Search Result<br> </span> 
+   </div> 
+  </div> 
+  <div data-dojo-type="dijit.Dialog" data-dojo-id="aboutmapDialog" title="Readme" class="icm-dialog"> 
+   <div> 
+    <span class="dijitDialogPaneContentArea"><p> </p>
+     <center>
+       "As of January 2015, development of the UCSB Interactive Campus Map (ICMv2) was suspended.
+      <br> Although the current assets of the ICMv2 are still being used as an instructional resource, 
+      <br> and faculty and staff name searches performed are still accurate, by no means should the
+      <br> buildings/rooms layers on the ICMv2 be considered up-to-date, and not all buildings have 
+      <br> searchable room-level data." 
+     </center> <br> <p></p>
+     <center>
+      Send all feedback, questions, comments, and suggestions to:
+      <br> 
+      <img src="images/icm-email-address.png" width="50%">
+     </center><p></p> <p></p></span> 
+   </div> 
+  </div> 
+  <!--	<div data-dojo-type="dijit.Dialog" data-dojo-id="feedbackDialog" title="Feedback Form for the Interactive Campus Map" class="icm-dialog">
+	    <div>
+	    <span class="dijitDialogPaneContentArea">
+		<iframe seamless="seamless" src="https://docs.google.com/spreadsheet/embeddedform?formkey=dEZSd1JKYkY4bGFjTFotWkxwdkpobGc6MQ" width="100%" height="650" frameborder="0" marginheight="0" marginwidth="0">Loading...</iframe>
+	    </span>
+	    </div>
+	</div>  --> 
+  <div data-dojo-type="dijit.Dialog" data-dojo-id="energydashboardDialog" id="energydashboardDialog" title="UCSB Energy Dashboard" class="icm-dialog" style="min-width:90%;"> 
+   <span class="dijitDialogPaneContentArea"> 
+    <div> 
+     <div style="width:99%; height:100%;" id="energydashboardRight"> 
+      <div id="energycontainer" style="width:100%; height:250px;">
+       No buildings selected.
+       <br>
+       <br>Energy usage charts can be viewed by clicking on a highlighted building then clicking 
+       <br>
+       <span>" <img src="images/iconChart_small.png">&nbsp;<u>View Energy Usage</u> "</span>
+       <br>
+      </div> 
+     </div> 
+     <p><small>Disclaimer: This is preliminary data and is <b>not meant to be an authoritative source.</b></small></p> 
+    </div> </span> 
+  </div> 
+  <!-- No analytics Loaded for mapdev.geog.ucsb.edu -->   
+ </body>
+</html>
